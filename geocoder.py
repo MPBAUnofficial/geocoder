@@ -1,6 +1,8 @@
-import re
 import csv
 import json
+
+import re
+
 
 STREET_TYPES = {}
 
@@ -147,7 +149,7 @@ class Address(object):
         if number_match:
             address_number = self.tokens.pop(-1)
             number = number_match.group('number')
-            self.address_number = str(int(number)) + address_number[:len(number)]
+            self.address_number = str(int(number)) + address_number[len(number):]
 
     def _identify_normalize_address_type(self, token):
         for street_type, street_type_re in self.street_types.items():
@@ -172,7 +174,7 @@ class Address(object):
             if t1 != t2:
                 return MatchResult("NO", 0.0)
 
-        if self.address_number == other.address_number:
+        if self.has_number and self.address_number == other.address_number:
             return MatchResult("A1", 1.0)
         else:
             return MatchResult("A3", 1.0)
@@ -207,7 +209,7 @@ class Address(object):
             res = self.dotted_name_re.search(token)
             if res:
                 initials = res.group('name')
-                for other_token in copy_set_two:
+                for other_token in token_set_two:
                     if other_token.startswith(initials):
                         copy_set_one.remove(token)
                         try:
@@ -244,7 +246,7 @@ class Address(object):
             return MatchResult("NO", 0.0)
 
         if len(self_tokens) == 0 and len(other_tokens) == 0:
-            if self.address_number == other.address_number:
+            if self.has_number and self.address_number == other.address_number:
                 return MatchResult("A2", 1.0)
             else:
                 return MatchResult("A4", 1.0)
@@ -262,7 +264,7 @@ class Address(object):
         if len(self_unmatched) != 0 or len(other_unmatched) != 0:
             return MatchResult("NO", 0.0)
         else:
-            if self.address_number == other.address_number:
+            if self.has_number and self.address_number == other.address_number:
                 return MatchResult("A2", 1.0)
             else:
                 return MatchResult("A4", 1.0)
@@ -278,10 +280,10 @@ class Address(object):
     def compare_fuzzy(self, other):
         match_type = "B2"
         match_quality = 0.0
-        if self.address_type == other.address_type:
-            match_quality += 0.10
+        if self.has_type and self.address_type == other.address_type:
+            match_quality += 0.20
 
-        if self.address_number == other.address_number:
+        if self.has_number and self.address_number == other.address_number:
             match_quality += 0.10
             match_type = "B1"
 
@@ -289,7 +291,7 @@ class Address(object):
         oq = QGram(other.tokens)
 
         mq = sq.matching_quota(oq)
-        match_quality += (mq * 0.80)
+        match_quality += (mq * 0.70)
 
         return MatchResult(match_type, match_quality)
 
@@ -302,10 +304,18 @@ class Address(object):
 
         return res
 
+    @property
+    def has_number(self):
+        return self.address_number is None
+
+    @property
+    def has_type(self):
+        return self.address_type is None
+
     def __repr__(self):
-        return "{0} {1} {2}".format(self.address_type,
+        return "{0} {1} {2}".format(self.address_type if self.address_type is not None else "",
                                     " ".join(self.tokens),
-                                    self.address_number)
+                                    self.address_number if self.address_number is not None else "").strip()
 
     def __str__(self):
         return repr(self)
@@ -315,10 +325,8 @@ class Geocoder(object):
     def __init__(self, reference_dataset):
         self.reference_dataset = reference_dataset
 
-
     @staticmethod
     def addresses_from_csv(filename, delimiter, id_column, addr_column):
-        values = None
         with open(filename, 'r') as f:
             reader = csv.DictReader(f, delimiter=delimiter)
             values = [Address.from_dict(addr, id_column, addr_column) for addr in reader]
@@ -357,16 +365,21 @@ def main():
     load_street_type('street_types.json')
     geoc = Geocoder.from_csv('stradario.csv', ',', 'gid', 'fumetto')
     to_localize = Geocoder.addresses_from_csv('indirizzi_con_id.csv', ';', 'id', 'my_indirizzo')
-    localized = {}
 
     with open('output.csv', 'w') as f:
         w = csv.writer(f, delimiter=',', quotechar="\"", quoting=csv.QUOTE_MINIMAL)
-        w.writerow(["id_stradario", "id_input", "livello_confidenza", "percentuale"])
+        w.writerow(["indirizzo_stradario", "id_stradario", "indirizzo_input", "id_input", "livello_confidenza", "percentuale"])
         for i, t in enumerate(to_localize):
-            print i+1
+            print i + 1
             matching_address, comparison_value = geoc.localize(t)
-            w.writerow([matching_address.unique_id, t.unique_id, comparison_value.match_type, comparison_value.match_quality])
+            w.writerow([str(matching_address),
+                        matching_address.unique_id,
+                        str(t),
+                        t.unique_id,
+                        comparison_value.match_type,
+                        comparison_value.match_quality])
             f.flush()
+
 
 if __name__ == '__main__':
     main()
