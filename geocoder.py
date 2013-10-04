@@ -1,8 +1,6 @@
+import re
 import csv
 import json
-
-import re
-
 
 STREET_TYPES = {}
 
@@ -205,6 +203,7 @@ class Address(object):
         copy_set_two = token_set_two.copy()
         matching_dict = {}
 
+
         for token in token_set_one:
             res = self.dotted_name_re.search(token)
             if res:
@@ -281,7 +280,7 @@ class Address(object):
         match_type = "B2"
         match_quality = 0.0
         if self.has_type and self.address_type == other.address_type:
-            match_quality += 0.20
+            match_quality += 0.10
 
         if self.has_number and self.address_number == other.address_number:
             match_quality += 0.10
@@ -291,7 +290,7 @@ class Address(object):
         oq = QGram(other.tokens)
 
         mq = sq.matching_quota(oq)
-        match_quality += (mq * 0.70)
+        match_quality += (mq * 0.80)
 
         return MatchResult(match_type, match_quality)
 
@@ -306,11 +305,11 @@ class Address(object):
 
     @property
     def has_number(self):
-        return self.address_number is None
+        return self.address_number is not None
 
     @property
     def has_type(self):
-        return self.address_type is None
+        return self.address_type is not None
 
     def __repr__(self):
         return "{0} {1} {2}".format(self.address_type if self.address_type is not None else "",
@@ -379,6 +378,7 @@ def main():
                         comparison_value.match_type,
                         comparison_value.match_quality])
             f.flush()
+
 
 
 if __name__ == '__main__':
